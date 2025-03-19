@@ -1,163 +1,96 @@
-Vue.component('board', {
+Vue.component('cardForm', {
     template: `
-    <div class="app-container">
-        <div class="columns-container">
-            <column 
-                title="" 
-                :maxCards="3" 
-                :cards="column1Cards" 
-                :isBlocked="isBlocked" 
-                @added-card="addCardToColumn1"
-                @move-card="moveCard"
-                @open-modal="openModal"
-            ></column>
-            <column 
-                title="В работе" 
-                :maxCards="5" 
-                :cards="column2Cards" 
-                @move-card="moveCard"
-            ></column>
-            <column 
-                title="Завершено" 
-                :cards="column3Cards"
-            ></column>
-        </div>
-        <!-- Модальное окно -->
-        <div v-if="isModalVisible" class="modal-overlay">
-            <div class="modal-content">
-                <!-- Вставка формы внутри модального окна -->
-                <card-form @card-submitted="addCard" @close-modal="closeModal"></card-form>
-                <button @click="closeModal" class="close-btn">Закрыть</button>
+        <form class="card-form" @submit.prevent="onSubmit">
+            <div class="errors" v-for="error in errors">{{ error }}</div>
+            <input type="text" v-model="note" placeholder="Напишите заметку">
+            <p>Задачи</p>
+            <div v-for="(task, index) in tasks" :key="index">
+                <input type="text" v-model="task.text" :placeholder="'Введите задачу'">
             </div>
-        </div>
-    </div>
+            <button type="button" @click="addTask">Добавить задачу +</button>
+            <div>
+                <input type="date" class="inp-date" v-model="deadline" :min="minDate">
+            </div>
+            <div class="priority">
+                <label>
+                    <input type="checkbox" v-model="isPriority" >
+                    Установить высокий приоритет
+                </label>
+            </div>
+            <button type="submit" class="btn-save">Сохранить</button>
+        </form>
     `,
     data() {
         return {
-            column1Cards: [],
-            column2Cards: [],
-            column3Cards: [],
-            isBlocked: false,
-            isModalVisible: false 
+            note: null,
+            tasks: [
+                { text:''},
+                { text:''},
+                { text:''}
+            ],
+            deadline: null,
+            minDate: new Date().toISOString().split('T')[0],
+            isPriority: false,
+            errors: []
+        }
+    },
+    computed: {
+        emptyTasks() {
+            return this.tasks.filter(task => task.text.trim() == '');
         }
     },
     methods: {
-        openModal() {
-            this.isModalVisible = true; 
-        },
-        closeModal() {
-            this.isModalVisible = false; 
-        },
-        addCard(cardData) {
-            this.addCardToColumn1(cardData);
-            this.closeModal(); 
-        },
-        addCardWithPriority(cardsArray, cardData) {
-            if (cardData.priority) {
-                cardsArray.unshift(cardData);
-            } else {
-                const firstNonPriorityIndex = cardsArray.findIndex(card => !card.priority);
-                if (firstNonPriorityIndex === -1) {
-                    cardsArray.push(cardData);
-                } else {
-                    cardsArray.splice(firstNonPriorityIndex, 0, cardData);
+        onSubmit() {
+            this.errors = [];
+            if (this.note && this.tasks.length >= 3 && this.emptyTasks.length == 0 && this.deadline) {
+                const time = new Date().toLocaleString('ru-RU', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                });
+                let cardData = {
+                    note: this.note,
+                    tasks: this.tasks,
+                    deadline: this.deadline,
+                    priority: this.isPriority,
+                    time: time
                 }
-            }
-        },
-        addCardToColumn1(cardData) {
-            this.addCardWithPriority(this.column1Cards, cardData); 
-            this.saveData();
-        },
-        moveCard({ card, targetColumn, cardDate }) {
-            if (this.column2Cards.length >= 5 && targetColumn == 'column2') {
-                this.isBlocked = true;
-                return; 
-            } else {
-                this.isBlocked = false;
-            }
-            this.column1Cards = this.column1Cards.filter(c => c !== card);
-            this.column2Cards = this.column2Cards.filter(c => c !== card);
+                this.$emit('card-submitted', cardData);
 
-            if (targetColumn == 'column2') {
-                this.addCardWithPriority(this.column2Cards, card);
-            } else if (targetColumn == 'column3') {
-                card.completionDate = cardDate;
-                card.disabled = true; 
-                this.addCardWithPriority(this.column3Cards, card);
-            }
-            this.saveData();
-        },
-        saveData() {
-            const data = {
-                column1Cards: this.column1Cards,
-                column2Cards: this.column2Cards,
-                column3Cards: this.column3Cards
-            };
-            localStorage.setItem('boardData', JSON.stringify(data));
-        },
-        loadData() {
-            const data = localStorage.getItem('boardData');
-            if (data) {
-                const parsedData = JSON.parse(data);
-                this.column1Cards = parsedData.column1Cards;
-                this.column2Cards = parsedData.column2Cards;
-                this.column3Cards = parsedData.column3Cards;
-            }
-        }
-    },
-    created() {
-        this.loadData(); 
-    }
-});
-
-Vue.component('column', {
-    props: {
-        isBlocked: {
-            type: Boolean,
-            default: false
-        },
-        title: {
-            type: String,
-            required: true
-        },
-        maxCards: {
-            type: Number,
-            required: true
-        },
-        cards: {
-            type: Array,
-            required: true
-        }
-    },
-    template: `
-        <div class="column">
-            <h2>{{ title }}</h2>
-            <button v-if="!title" @click="showForm" :disabled="isBlocked">Создать заметку +</button>
-            <card v-for="(card, index) in cards" :key="card.note + index" :card="card" :isBlocked="isBlocked" :isCompleted="title == 'Завершено'" @move-card="moveCard"></card>
-        </div>
-    `,
-    data() {
-        return {
-            isFormVisible: false
-        }
-    },
-    methods: {
-        addCard(cardData) {
-            if (this.cards.length < this.maxCards) {
-                this.$emit('added-card', cardData); 
+                this.note = null;
+                this.tasks = [
+                { text: '' },
+                { text: '' },
+                { text: '' }
+                ];
+                this.deadline = null;
+                this.isPriority = false;
             } else {
-                alert(`Максимальное количество карточек в этой колонке: ${this.maxCards}`);
+                if (this.emptyTasks.length > 0) this.errors.push("Задачи не могут быть пустыми!");
+                if (!this.note) this.errors.push("Введите заметку!");
+                if (!this.deadline) this.errors.push("Назначьте крайний срок!")
+                if (this.tasks.length < 3) this.errors.push("Введите хотя бы 3 задачи!");
             }
         },
-        showForm() {
-            this.$emit('open-modal'); 
-        },
-        moveCard(moveData) {
-            this.$emit('move-card', moveData); 
+        addTask() {
+            this.errors = [];
+            if (this.tasks.length < 5) {
+
+                const newTask = {text:''};
+
+                if (this.emptyTasks.length == 0) {
+                    this.tasks.push(newTask);
+                } else {
+                    this.errors.push("Задачи не могут быть пустыми!");
+                }
+            } else {
+                this.errors.push("Задач должно быть не больше 5!");
+            }
         }
     }
 });
-
 
 Vue.component('card', {
     props: {
@@ -184,6 +117,8 @@ Vue.component('card', {
                     {{ task.text }}
                 </li>
             </ul>
+            <p>Создано: {{ card.time }}<p>
+            <p>До {{ formatDeadline }}</p>
             <p v-if="card.completionDate">Завершено: {{ formatDate }}</p>
         </div>
     `,
@@ -196,6 +131,14 @@ Vue.component('card', {
                     year: 'numeric',
                     hour: '2-digit',
                     minute: '2-digit',
+                });
+        },
+        formatDeadline() {
+            const deadline = new Date(this.card.deadline);
+            return deadline.toLocaleString('ru-RU', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric'
                 });
         }
     },
@@ -216,83 +159,166 @@ Vue.component('card', {
     }
 });
 
-
-Vue.component('cardForm', {
+Vue.component('column', {
+    props: {
+        isBlocked: {
+            type: Boolean,
+            default: false
+        },
+        title: {
+            type: String,
+            required: true
+        },
+        maxCards: {
+            type: Number,
+            required: true
+        },
+        cards: {
+            type: Array,
+            required: true
+        }
+    },
     template: `
-        <form class="card-form" @submit.prevent="onSubmit">
-            <div class="errors" v-for="error in errors">{{ error }}</div>
-            <input type="text" v-model="note" placeholder="Напишите заметку">
-            <p>Задачи</p>
-            <div v-for="(task, index) in tasks" :key="index">
-                <input type="text" v-model="task.text" :placeholder="'Введите задачу'">
-            </div>
-            <button type="button" @click="addTask">Добавить задачу +</button>
-            <div class="priority">
-                <label>
-                    <input type="checkbox" v-model="isPriority">
-                    Установить высокий приоритет
-                </label>
-            </div>
-            <button type="submit" class="btn-save" @click="closeForm">Сохранить</button>
-        </form>
+        <div class="column">
+            <h2>{{ title }}</h2>
+            <button v-if="title=='Запланировано'" @click="showForm" :disabled="isBlocked">Создать заметку +</button>
+            <card v-for="(card, index) in cards" :key="card.note + index" :card="card" :isBlocked="isBlocked" :isCompleted="title == 'Выполнено'" @move-card="moveCard"></card>
+        </div>
     `,
     data() {
         return {
-            note: null,
-            tasks: [
-                { text:''},
-                { text:''},
-                { text:''}
-            ],
-            isPriority: false,
-            errors: []
-        }
-    },
-    computed: {
-        emptyTasks() {
-            return this.tasks.filter(task => task.text.trim() == '');
+            isFormVisible: false
         }
     },
     methods: {
-        onSubmit() {
-            this.errors = [];
-            if (this.note && this.tasks.length >= 3 && this.emptyTasks.length == 0) {
-                let cardData = {
-                    note: this.note,
-                    tasks: this.tasks,
-                    priority: this.isPriority 
-                }
-                this.$emit('card-submitted', cardData);
-            } else {
-                if (this.emptyTasks.length > 0) this.errors.push("Задачи не могут быть пустыми!");
-                if (!this.note) this.errors.push("Введите заметку!");
-                if (this.tasks.length < 3) this.errors.push("Введите хотя бы 3 задачи!");
-            }
+        showForm() {
+            this.$emit('open-modal'); 
         },
-        addTask() {
-            this.errors = [];
-            if (this.tasks.length < 5) {
-
-                const newTask = {text:''};
-
-                if (this.emptyTasks.length == 0) {
-                    this.tasks.push(newTask);
-                } else {
-                    this.errors.push("Задачи не могут быть пустыми!");
-                }
-            } else {
-                this.errors.push("Задач должно быть не больше 5!");
-            }
-        },
-        closeForm() {
-            this.$emit('close-modal'); 
+        moveCard(moveData) {
+            this.$emit('move-card', moveData); 
         }
     }
 });
 
+Vue.component('board', {
+    template: `
+    <div class="app-container">
+        <div class="columns-container">
+            <column 
+                title="Запланировано" 
+                :maxCards="3" 
+                :cards="column1Cards" 
+                :isBlocked="isBlocked" 
+                @move-card="moveCard"
+                @open-modal="openModal"
+            ></column>
+            <column 
+                title="В работе" 
+                :maxCards="5" 
+                :cards="column2Cards" 
+                @move-card="moveCard"
+            ></column>
+            <column
+                title="Тестирование"
+                :cards="column4Cards" 
+                :isBlocked="isBlocked" 
+                @move-card="moveCard"
+            ></column>
+            <column 
+                title="Выполнено" 
+                :cards="column3Cards"
+            ></column>
+        </div>
+        <!-- Модальное окно -->
+        <div v-if="isModalVisible" class="modal-overlay">
+            <div class="modal-content">
+                <card-form @card-submitted="addCardToColumn1"></card-form>
+                <button @click="closeModal" class="close-btn">Закрыть</button>
+            </div>
+        </div>
+    </div>
+    `,
+    data() {
+        return {
+            column1Cards: [],
+            column2Cards: [],
+            column3Cards: [],
+            column4Cards: [],
+            isBlocked: false,
+            isModalVisible: false 
+        }
+    },
+    methods: {
+        openModal() {
+            this.isModalVisible = true; 
+            console.log('Модальное окно должно открыться');
+        },
+        closeModal() {
+            this.isModalVisible = false; 
+            console.log('Модальное окно закрыто');
+        },
+        addCardWithPriority(cardsArray, cardData) {
+            if (cardData.priority) {
+                cardsArray.unshift(cardData);
+            } else {
+                const firstNonPriorityIndex = cardsArray.findIndex(card => !card.priority);
+                if (firstNonPriorityIndex === -1) {
+                    cardsArray.push(cardData);
+                } else {
+                    cardsArray.splice(firstNonPriorityIndex, 0, cardData);
+                }
+            }
+        },
+        addCardToColumn1(cardData) {
+            this.addCardWithPriority(this.column1Cards, cardData); 
+            this.saveData();
+        },
+        moveCard({ card, targetColumn, cardDate }) {
+            if (this.column2Cards.length >= 5 && targetColumn == 'column2') {
+                this.isBlocked = true;
+                this.saveData();
+                return; 
+            } else {
+                this.isBlocked = false;
+            }
+            this.column1Cards = this.column1Cards.filter(c => c !== card);
+            this.column2Cards = this.column2Cards.filter(c => c !== card);
 
-
-
+            if (targetColumn == 'column2') {
+                this.addCardWithPriority(this.column2Cards, card);
+            } else if (targetColumn == 'column3') {
+                card.completionDate = cardDate;
+                card.disabled = true; 
+                this.addCardWithPriority(this.column3Cards, card);
+            }
+            this.saveData();
+        },
+        saveData() {
+            const data = {
+                column1Cards: this.column1Cards,
+                column2Cards: this.column2Cards,
+                column3Cards: this.column3Cards,
+                column4Cards: this.column4Cards,
+                isBlocked : this.isBlocked
+            };
+            localStorage.setItem('boardData', JSON.stringify(data));
+        },
+        loadData() {
+            const data = localStorage.getItem('boardData');
+            if (data) {
+                const parsedData = JSON.parse(data);
+                this.column1Cards = parsedData.column1Cards;
+                this.column2Cards = parsedData.column2Cards;
+                this.column3Cards = parsedData.column3Cards;
+                this.column4Cards = parsedData.column4Cards,
+                this.isBlocked = parsedData.isBlocked;
+            }
+        }
+    },
+    created() {
+        this.loadData(); 
+    }
+});
 
 
 
