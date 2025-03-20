@@ -24,9 +24,9 @@ Vue.component('cardForm', {
         return {
             note: null,
             tasks: [
-                { text:''},
-                { text:''},
-                { text:''}
+                { text: '' },
+                { text: '' },
+                { text: '' }
             ],
             deadline: null,
             minDate: new Date().toISOString().split('T')[0],
@@ -61,9 +61,9 @@ Vue.component('cardForm', {
 
                 this.note = null;
                 this.tasks = [
-                { text: '' },
-                { text: '' },
-                { text: '' }
+                    { text: '' },
+                    { text: '' },
+                    { text: '' }
                 ];
                 this.deadline = null;
                 this.isPriority = false;
@@ -77,9 +77,7 @@ Vue.component('cardForm', {
         addTask() {
             this.errors = [];
             if (this.tasks.length < 5) {
-
-                const newTask = {text:''};
-
+                const newTask = { text: '' };
                 if (this.emptyTasks.length == 0) {
                     this.tasks.push(newTask);
                 } else {
@@ -98,22 +96,27 @@ Vue.component('card', {
             type: Object,
             required: true
         },
-        isBlocked: {
-            type: Boolean,
-            default: false
-        },
         isCompleted: {
             type: Boolean,
             default: false
         }
     },
     template: `
-        <div class="card">
+        <div class="card" @dragstart="$emit('dragstart', $event)" draggable="true">
             <h3>{{ card.note }}</h3>
+            <div class="dots-btn" @click="toggleMenu" :class="{ active: isMenuVisible }">
+                <span class="dot"></span>
+                <span class="dot"></span>
+                <span class="dot"></span>
+            </div>
+            <div  class="menu" v-if="isMenuVisible">
+                <button class="edit-btn" @click="startEdit">Редактировать</button>
+                <button class="del-btn">Удалить</button>
+            </div>
             <p v-if="card.priority">Высокий приоритет</p>
             <ul>
                 <li v-for="(task, index) in card.tasks" :key="index" :class="{ 'completed': task.completed }" class="task-item">
-                    <input type="checkbox" v-model="task.completed" @change="checkProgress" :disabled="isBlocked||isCompleted" >
+                    <input type="checkbox" v-model="task.completed" :disabled="isCompleted" >
                     {{ task.text }}
                 </li>
             </ul>
@@ -122,55 +125,47 @@ Vue.component('card', {
             <p v-if="card.completionDate">Завершено: {{ formatDate }}</p>
         </div>
     `,
+    data() {
+        return{
+            isEditing: false,
+            isMenuVisible: false,
+        }
+    },
     computed: {
         formatDate() {
-                const nowDate = new Date(this.card.completionDate);
-                return nowDate.toLocaleString('ru-RU', {
-                    day: '2-digit',
-                    month: '2-digit',
-                    year: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                });
+            const nowDate = new Date(this.card.completionDate);
+            return nowDate.toLocaleString('ru-RU', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+            });
         },
         formatDeadline() {
             const deadline = new Date(this.card.deadline);
             return deadline.toLocaleString('ru-RU', {
-                    day: '2-digit',
-                    month: '2-digit',
-                    year: 'numeric'
-                });
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric'
+            });
         }
     },
     methods: {
-        checkProgress() {
-            const completedTasks = this.card.tasks.filter(task => task.completed).length;
-            const allTasks = this.card.tasks.length;
-            const progress = (completedTasks / allTasks) * 100;
-            const date = Date.now();
-            if (progress >= 50 && progress < 100) {
-                this.$emit('move-card', { card: this.card, targetColumn: 'column2'}); // переместить в колонку 2
-             
-            } else if (progress === 100) {
-                this.$emit('move-card', { card: this.card, targetColumn: 'column3', cardDate: date}); // переместить в колонку 3
-            
-            }
-        }
+        startEdit() {
+            this.$emit('edit-card', this.card)
+            this.toggleMenu();
+        },
+        toggleMenu() {
+            this.isMenuVisible = !this.isMenuVisible;
+        },
     }
 });
 
 Vue.component('column', {
     props: {
-        isBlocked: {
-            type: Boolean,
-            default: false
-        },
         title: {
             type: String,
-            required: true
-        },
-        maxCards: {
-            type: Number,
             required: true
         },
         cards: {
@@ -179,10 +174,13 @@ Vue.component('column', {
         }
     },
     template: `
-        <div class="column">
+        <div class="column" @dragover="dragoverHandler" @drop="dropHandler">
             <h2>{{ title }}</h2>
-            <button v-if="title=='Запланировано'" @click="showForm" :disabled="isBlocked">Создать заметку +</button>
-            <card v-for="(card, index) in cards" :key="card.note + index" :card="card" :isBlocked="isBlocked" :isCompleted="title == 'Выполнено'" @move-card="moveCard"></card>
+            <button v-if="title=='Запланировано'" @click="showForm">Создать заметку +</button>
+            <card v-for="(card, index) in cards" :key="card.note + index" 
+            :card="card" :isCompleted="title == 'Выполнено'" 
+            @dragstart="dragstartHandler($event, card)"> 
+            </card>
         </div>
     `,
     data() {
@@ -192,11 +190,21 @@ Vue.component('column', {
     },
     methods: {
         showForm() {
-            this.$emit('open-modal'); 
+            this.$emit('open-modal');
         },
-        moveCard(moveData) {
-            this.$emit('move-card', moveData); 
+        dragstartHandler(ev, card) {
+            ev.dataTransfer.setData("application/json", JSON.stringify(card));
+            console.log(card);
+        },
+        dragoverHandler(ev) {
+            ev.preventDefault();
+            ev.dataTransfer.dropEffect = "move";
+        },
+        dropHandler(ev) {
+            const cardData = JSON.parse(ev.dataTransfer.getData("application/json"));
+            this.$emit('card-dropped', cardData);
         }
+
     }
 });
 
@@ -208,25 +216,23 @@ Vue.component('board', {
                 title="Запланировано" 
                 :maxCards="3" 
                 :cards="column1Cards" 
-                :isBlocked="isBlocked" 
-                @move-card="moveCard"
                 @open-modal="openModal"
+                @card-dropped="moveCard(column1Cards, $event)"
             ></column>
             <column 
                 title="В работе" 
-                :maxCards="5" 
                 :cards="column2Cards" 
-                @move-card="moveCard"
+                @card-dropped="moveCard(column2Cards, $event)"
             ></column>
             <column
                 title="Тестирование"
-                :cards="column4Cards" 
-                :isBlocked="isBlocked" 
-                @move-card="moveCard"
+                :cards="column3Cards" 
+                @card-dropped="moveCard(column3Cards, $event)"
             ></column>
             <column 
                 title="Выполнено" 
-                :cards="column3Cards"
+                :cards="column4Cards"
+                @card-dropped="moveCard(column4Cards, $event)"
             ></column>
         </div>
         <!-- Модальное окно -->
@@ -244,18 +250,37 @@ Vue.component('board', {
             column2Cards: [],
             column3Cards: [],
             column4Cards: [],
-            isBlocked: false,
-            isModalVisible: false 
+            isModalVisible: false
         }
     },
     methods: {
         openModal() {
-            this.isModalVisible = true; 
-            console.log('Модальное окно должно открыться');
+            this.isModalVisible = true;
         },
         closeModal() {
-            this.isModalVisible = false; 
-            console.log('Модальное окно закрыто');
+            this.isModalVisible = false;
+        },
+        addCardToColumn1(cardData) {
+            this.addCardWithPriority(this.column1Cards, cardData);
+            this.saveData();
+        },
+        moveCard(targetColumn, cardData) {
+            // Удаляем карточку из исходной колонки
+            const sourceColumns = [
+                this.column1Cards,
+                this.column2Cards,
+                this.column3Cards,
+                this.column4Cards
+            ];
+            for (const column of sourceColumns) {
+                const index = column.findIndex(card => card.note == cardData.note);
+                if (index !== -1) {
+                    column.splice(index, 1);
+                    break;
+                }
+            }// Добавляем карточку в целевую колонку
+            targetColumn.push(cardData);
+            this.saveData();
         },
         addCardWithPriority(cardsArray, cardData) {
             if (cardData.priority) {
@@ -269,38 +294,14 @@ Vue.component('board', {
                 }
             }
         },
-        addCardToColumn1(cardData) {
-            this.addCardWithPriority(this.column1Cards, cardData); 
-            this.saveData();
-        },
-        moveCard({ card, targetColumn, cardDate }) {
-            if (this.column2Cards.length >= 5 && targetColumn == 'column2') {
-                this.isBlocked = true;
-                this.saveData();
-                return; 
-            } else {
-                this.isBlocked = false;
-            }
-            this.column1Cards = this.column1Cards.filter(c => c !== card);
-            this.column2Cards = this.column2Cards.filter(c => c !== card);
 
-            if (targetColumn == 'column2') {
-                this.addCardWithPriority(this.column2Cards, card);
-            } else if (targetColumn == 'column3') {
-                card.completionDate = cardDate;
-                card.disabled = true; 
-                this.addCardWithPriority(this.column3Cards, card);
-            }
-            this.saveData();
-        },
         saveData() {
             const data = {
                 column1Cards: this.column1Cards,
                 column2Cards: this.column2Cards,
                 column3Cards: this.column3Cards,
-                column4Cards: this.column4Cards,
-                isBlocked : this.isBlocked
-            };
+                column4Cards: this.column4Cards
+            }
             localStorage.setItem('boardData', JSON.stringify(data));
         },
         loadData() {
@@ -310,14 +311,14 @@ Vue.component('board', {
                 this.column1Cards = parsedData.column1Cards;
                 this.column2Cards = parsedData.column2Cards;
                 this.column3Cards = parsedData.column3Cards;
-                this.column4Cards = parsedData.column4Cards,
-                this.isBlocked = parsedData.isBlocked;
+                this.column4Cards = parsedData.column4Cards;
             }
         }
     },
     created() {
-        this.loadData(); 
+        this.loadData();
     }
+
 });
 
 
