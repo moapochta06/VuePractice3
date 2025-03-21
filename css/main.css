@@ -19,7 +19,7 @@ h3{
 }
 ul{
     list-style: none;
-    padding-left: 25px;
+    padding-left: 15px;
 }
 p{
     margin-top: 0;
@@ -194,6 +194,8 @@ input[type="checkbox"] {
     margin: 0 10px 0 0;
     width: 25px;
     height: 25px;
+    flex-shrink: 0; 
+
 }
 
 .errors{
@@ -201,3 +203,16 @@ input[type="checkbox"] {
     color: #ff1130;
 }
 
+textarea {
+    width: 100%; /* Ширина на всю доступную область */
+    height: 90px; /* Высота текстового поля */
+    padding: 10px; /* Внутренние отступы */
+    font-size: 16px; /* Размер шрифта */
+    border: 1px solid #ccc; /* Граница */
+    border-radius: 5px; /* Закругленные углы */
+    resize: none; /* Разрешить изменять размер только по вертикали */
+    box-sizing: border-box; /* Учитывать padding и border в размерах */
+    outline: none; /* Убрать обводку при фокусе */
+    transition: border-color 0.3s ease; /* Плавный переход для границы */
+    margin-bottom: 20px;
+}

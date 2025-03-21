@@ -28,15 +28,13 @@ Vue.component('cardForm', {
                 </label>
             </div>
             <button v-if="!isEditing" type="submit" class="btn-save">Сохранить</button>
-            <button v-else type="submit" class="btn-save">Сохранить изменения</button>
+            <button v-else type="submit" class="btn-save" @click="$emit('updated')">Сохранить изменения</button>
         </form>
     `,
     data() {
         return {
             note: this.card ? this.card.note : null,
             tasks: this.card ? this.card.tasks.map(task => ({ text: task.text })) : [
-                { text: '' },
-                { text: '' },
                 { text: '' }
             ],
             deadline: this.card ? this.card.deadline : null,
@@ -53,7 +51,7 @@ Vue.component('cardForm', {
     methods: {
         onSubmit() {
             this.errors = [];
-            if (this.note && this.tasks.length >= 3 && this.emptyTasks.length == 0 && this.deadline) {
+            if (this.note && this.emptyTasks.length == 0 && this.deadline) {
                 const time = new Date().toLocaleString('ru-RU', {
                     day: '2-digit',
                     month: '2-digit',
@@ -77,7 +75,7 @@ Vue.component('cardForm', {
                 if (this.emptyTasks.length > 0) this.errors.push("Задачи не могут быть пустыми!");
                 if (!this.note) this.errors.push("Введите заметку!");
                 if (!this.deadline) this.errors.push("Назначьте крайний срок!")
-                if (this.tasks.length < 3) this.errors.push("Введите хотя бы 3 задачи!");
+                // if (this.tasks.length < 3) this.errors.push("Введите хотя бы 3 задачи!");
             }
         },
         addTask() {
@@ -96,8 +94,6 @@ Vue.component('cardForm', {
         resetForm() {
             this.note = null;
             this.tasks = [
-                { text: '' },
-                { text: '' },
                 { text: '' }
             ];
             this.deadline = null;
@@ -108,6 +104,36 @@ Vue.component('cardForm', {
     }
 });
 
+Vue.component('returnReasonModal',{
+    template:`
+        <div class="modal-overlay">
+            <div class="modal-content">
+                <h3>Укажите причину возврата</h3>
+                <textarea v-model="reason" placeholder="Причина возврата"></textarea>
+                <button @click="submitReason">Подтвердить</button>
+                <button @click="cancel">Отмена</button>
+            </div>
+        </div>`,
+        data() {
+            return {
+              reason: ''
+            };
+          },
+          methods: {
+            submitReason() {
+              if (this.reason.trim() !== '') {
+                this.$emit('reason-submitted', this.reason);
+              } else {
+                alert('Пожалуйста, укажите причину возврата.');
+              }
+            },
+            cancel() {
+              this.$emit('cancel');
+            }
+          }
+    })
+
+
 Vue.component('card', {
     props: {
         card: {
@@ -115,6 +141,10 @@ Vue.component('card', {
             required: true
         },
         isCompleted: {
+            type: Boolean,
+            default: false
+        },
+        isEditing: {
             type: Boolean,
             default: false
         }
@@ -129,7 +159,7 @@ Vue.component('card', {
             </div>
             <div  class="menu" v-if="isMenuVisible">
                 <button class="edit-btn" @click="startEdit">Редактировать</button>
-                <button class="del-btn">Удалить</button>
+                <button class="del-btn" @click="deleteCard">Удалить</button>
             </div>
             <p v-if="card.priority">Высокий приоритет</p>
             <ul>
@@ -138,8 +168,10 @@ Vue.component('card', {
                     {{ task.text }}
                 </li>
             </ul>
-            <p>Создано: {{ card.time }}<p>
+            <p v-if="isEditing">Обновлено: {{ card.time }}</p>
+            <p v-else>Создано: {{ card.time }}</p>
             <p>До {{ formatDeadline }}</p>
+            <p v-if="card.returnReason">Причина возврата: {{ card.returnReason }}</p>
             <p v-if="card.completionDate">Завершено: {{ formatDate }}</p>
         </div>
     `,
@@ -176,6 +208,10 @@ Vue.component('card', {
         toggleMenu() {
             this.isMenuVisible = !this.isMenuVisible;
         },
+        deleteCard() {
+            this.$emit('delete-card', this.card);
+            this.toggleMenu();
+        }
     }
 });
 
@@ -197,17 +233,25 @@ Vue.component('column', {
             <card v-for="(card, index) in cards" :key="card.note + index" 
             :card="card" :isCompleted="title == 'Выполнено'" 
             @dragstart="dragstartHandler($event, card)"
-            @edit-card="$emit('edit-card', card)">
+            :isEditing="isEditing"
+            @edit-card="editCard(card)"
+            @delete-card="$emit('delete-card', card)"
+            :columnTitle="title"
             > 
             </card>
         </div>
     `,
     data() {
         return {
-            isFormVisible: false
+            isFormVisible: false,
+            isEditing: false,
         }
     },
     methods: {
+        editCard(card) {
+            this.$emit('edit-card', card); 
+            this.isEditing = true; 
+        },
         showForm() {
             this.$emit('open-modal');
         },
@@ -238,23 +282,27 @@ Vue.component('board', {
                 @open-modal="openModal"
                 @card-dropped="moveCard(column1Cards, $event)"
                 @edit-card="editCard"
+                @delete-card="deleteCard"
             ></column>
             <column 
                 title="В работе" 
                 :cards="column2Cards" 
                 @card-dropped="moveCard(column2Cards, $event)"
                 @edit-card="editCard"
+                @delete-card="deleteCard"
             ></column>
             <column
                 title="Тестирование"
                 :cards="column3Cards" 
                 @card-dropped="moveCard(column3Cards, $event)"
                 @edit-card="editCard"
+                @delete-card="deleteCard"
             ></column>
             <column 
                 title="Выполнено" 
                 :cards="column4Cards"
                 @card-dropped="moveCard(column4Cards, $event)"
+                @delete-card="deleteCard"
             ></column>
         </div>
         <!-- Модальное окно -->
@@ -264,6 +312,8 @@ Vue.component('board', {
                 <button @click="closeModal" class="close-btn">Закрыть</button>
             </div>
         </div>
+         <!-- Модальное окно для указания причины возврата -->
+        <returnReasonModal v-if="showReasonModal" @reason-submitted="submitReturnReason" @cancel="cancelReturnReason"></returnReasonModal>
     </div>
     `,
     data() {
@@ -274,10 +324,21 @@ Vue.component('board', {
             column4Cards: [],
             isModalVisible: false,
             isEditing: false,
-            editingCard: null
+            editingCard: null,
+            showReasonModal: false, 
+            draggedCard: null,
+            targetColumn: null
         }
     },
     methods: {
+        getColumns() {
+            return [
+                this.column1Cards,
+                this.column2Cards,
+                this.column3Cards,
+                this.column4Cards
+            ];
+        },
         openModal() {
             this.isModalVisible = true;
         },
@@ -295,38 +356,71 @@ Vue.component('board', {
             this.closeModal();
         },
         moveCard(targetColumn, cardData) {
-            // Удаляем карточку из исходной колонки
-            const sourceColumns = [
-                this.column1Cards,
-                this.column2Cards,
-                this.column3Cards,
-                this.column4Cards
-            ];
-            for (const column of sourceColumns) {
-                const index = column.findIndex(card => card.note == cardData.note);
-                if (index !== -1) {
-                    column.splice(index, 1);
-                    break;
+            const columns = this.getColumns();
+            const sourceColumnIndex = columns.findIndex(column =>
+                column.some(card => JSON.stringify(card) == JSON.stringify(cardData))
+            );
+            const targetColumnIndex = columns.indexOf(targetColumn);
+            const sourceColumn = columns[sourceColumnIndex];
+            const cardIndex = sourceColumn.findIndex(card => JSON.stringify(card) == JSON.stringify(cardData));
+            const cardToMove = sourceColumn[cardIndex];
+        
+            if (sourceColumnIndex === 2) { // Если из колонки "Тестирование"
+                if (targetColumnIndex === 1) { // В "В работе"
+                    this.draggedCard = cardToMove;
+                    this.targetColumn = targetColumn;
+                    this.showReasonModal = true; 
+                    return;
+                } else if (targetColumnIndex !== 3) {
+                    // Разрешить только в "В работу" и "Выполнено"
+                    alert('Из колонки "Тестирование" можно перемещать только в колонки "В работе" или "Выполнено".');
+                    return;
                 }
-            }// Добавляем карточку в целевую колонку
-            targetColumn.unshift(cardData);
+            }
+        
+            // Удаление карточки из исходной колонки
+            sourceColumn.splice(cardIndex, 1);
+        
+            // Добавление в целевую колонку
+            const clonedCard = JSON.parse(JSON.stringify(cardData));
+            targetColumn.unshift(clonedCard);
+            
+            // Сохраняем данные после успешного перемещения
             this.saveData();
+        },
+        deleteCard(cardData) {
+            let updated = false;
+            this.getColumns().forEach(column => {
+                if (updated) return;
+                const index = column.findIndex(card => JSON.stringify(card) == JSON.stringify(cardData));
+                column.splice(index, 1);
+                updated = true;
+            });
+            if (updated) {
+                this.saveData();
+            }
         },
         updateCard(cardData) {
             let updated = false;
-            const columns = [
-                this.column1Cards, 
-                this.column2Cards, 
-                this.column3Cards, 
-                this.column4Cards
-            ];
-        
-            columns.forEach(column => {
+            this.getColumns().forEach(column => {
                 if (updated) return;
-        
                 const index = column.findIndex(card => JSON.stringify(card) == JSON.stringify(this.editingCard));
-                    column.splice(index, 1, cardData);
+                if (index > -1) {
+                    // Создаем новый объект с обновленными данными и сохраняем ссылки на существующие свойства
+                    const updatedCard = {
+                        ...this.editingCard, // сохраняем существующие свойства
+                        ...cardData,         // применяем обновленные данные
+                        time: new Date().toLocaleString('ru-RU', { // обновляем время изменения
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                        })
+                    };
+                    column.splice(index, 1, updatedCard); // заменяем старую карточку на обновленную
                     updated = true;
+                }
             });
         },
         editCard(card) {
@@ -350,7 +444,6 @@ Vue.component('board', {
                 }
             }
         },
-
         saveData() {
             const data = {
                 column1Cards: this.column1Cards,
@@ -369,15 +462,48 @@ Vue.component('board', {
                 this.column3Cards = parsedData.column3Cards;
                 this.column4Cards = parsedData.column4Cards;
             }
+        },
+        submitReturnReason(reason) {
+            if (this.draggedCard && this.targetColumn) {
+                // Находим исходную колонку
+                const columns = this.getColumns();
+                const sourceColumn = columns.find(column => 
+                    column.some(card => JSON.stringify(card) == JSON.stringify(this.draggedCard))
+                );
+        
+                if (sourceColumn) {
+                    // Удаляем карточку из исходной колонки
+                    const index = sourceColumn.findIndex(card => 
+                        JSON.stringify(card) == JSON.stringify(this.draggedCard)
+                    );
+                    if (index > -1) {
+                        sourceColumn.splice(index, 1);
+                    }
+                }
+        
+                // Добавляем причину возврата и перемещаем в новую колонку
+                this.draggedCard.returnReason = reason;
+                this.targetColumn.push(this.draggedCard);
+        
+                // Очищаем состояние
+                this.showReasonModal = false;
+                this.draggedCard = null;
+                this.targetColumn = null;
+        
+                // Сохраняем данные
+                this.saveData();
+            }
+        },
+        cancelReturnReason() {
+            this.showReasonModal = false;
+            this.draggedCard = null;
+            this.targetColumn = null;
         }
     },
     created() {
         this.loadData();
     }
-
 });
-
-
 
 let app = new Vue({
     el: '#app'
