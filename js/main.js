@@ -21,11 +21,6 @@ Vue.component('cardForm', {
             <div>
                 <input type="date" class="inp-date" v-model="deadline" :min="minDate">
             </div>
-            <div class="priority">
-                <label>
-                    <input type="checkbox" v-model="isPriority" >
-                    Установить высокий приоритет
-                </label>
             </div>
             <button v-if="!isEditing" type="submit" class="btn-save">Сохранить</button>
             <button v-else type="submit" class="btn-save" @click="$emit('updated')">Сохранить изменения</button>
@@ -39,7 +34,6 @@ Vue.component('cardForm', {
             ],
             deadline: this.card ? this.card.deadline : null,
             minDate: new Date().toISOString().split('T')[0],
-            isPriority: this.card ? this.card.priority : false,
             errors: []
         }
     },
@@ -63,7 +57,6 @@ Vue.component('cardForm', {
                     note: this.note,
                     tasks: this.tasks,
                     deadline: this.deadline,
-                    priority: this.isPriority,
                     time: time
                 }
                 this.$emit('card-submitted', cardData);
@@ -97,7 +90,6 @@ Vue.component('cardForm', {
                 { text: '' }
             ];
             this.deadline = null;
-            this.isPriority = false;
             this.errors = [];
             this.$emit('form-reset');
         }
@@ -161,7 +153,6 @@ Vue.component('card', {
                 <button class="edit-btn" @click="startEdit">Редактировать</button>
                 <button class="del-btn" @click="deleteCard">Удалить</button>
             </div>
-            <p v-if="card.priority">Высокий приоритет</p>
             <ul>
                 <li v-for="(task, index) in card.tasks" :key="index" :class="{ 'completed': task.completed }" class="task-item">
                     <input type="checkbox" v-model="task.completed" :disabled="isCompleted" >
@@ -173,6 +164,7 @@ Vue.component('card', {
             <p>До {{ formatDeadline }}</p>
             <p v-if="card.returnReason">Причина возврата: {{ card.returnReason }}</p>
             <p v-if="card.completionDate">Завершено: {{ formatDate }}</p>
+            <p v-if="card.status">{{ card.status }}</p>
         </div>
     `,
     data() {
@@ -350,7 +342,7 @@ Vue.component('board', {
             if (this.isEditing) {
                 this.updateCard(cardData);
             } else {
-                this.addCardWithPriority(this.column1Cards, cardData);
+                this.column1Cards.unshift(cardData);
             }
             this.saveData();
             this.closeModal();
@@ -365,27 +357,31 @@ Vue.component('board', {
             const cardIndex = sourceColumn.findIndex(card => JSON.stringify(card) == JSON.stringify(cardData));
             const cardToMove = sourceColumn[cardIndex];
         
-            if (sourceColumnIndex === 2) { // Если из колонки "Тестирование"
-                if (targetColumnIndex === 1) { // В "В работе"
-                    this.draggedCard = cardToMove;
-                    this.targetColumn = targetColumn;
-                    this.showReasonModal = true; 
-                    return;
-                } else if (targetColumnIndex !== 3) {
-                    // Разрешить только в "В работу" и "Выполнено"
-                    alert('Из колонки "Тестирование" можно перемещать только в колонки "В работе" или "Выполнено".');
-                    return;
+            if (targetColumnIndex === 3) { // Если карточка перемещается в "Выполнено"
+                const deadlineDate = new Date(cardToMove.deadline);
+                const currentDate = new Date();
+                
+                // Устанавливаем время дедлайна на конец дня
+                deadlineDate.setHours(23, 59, 59, 999);
+
+                // Добавляем отметку о статусе выполнения
+                if (currentDate > deadlineDate) {
+                    cardToMove.status = 'Просрочено';
+                } else {
+                    cardToMove.status = 'Выполнено в срок';
                 }
+                
+                // Добавляем дату завершения
+                cardToMove.completionDate = currentDate.toISOString();
             }
         
             // Удаление карточки из исходной колонки
             sourceColumn.splice(cardIndex, 1);
-        
+
             // Добавление в целевую колонку
-            const clonedCard = JSON.parse(JSON.stringify(cardData));
+            const clonedCard = JSON.parse(JSON.stringify(cardToMove)); 
             targetColumn.unshift(clonedCard);
             
-            // Сохраняем данные после успешного перемещения
             this.saveData();
         },
         deleteCard(cardData) {
@@ -431,18 +427,6 @@ Vue.component('board', {
         resetForm() {
             this.editingCard = null;
             this.isEditing = false;
-        },
-        addCardWithPriority(cardsArray, cardData) {
-            if (cardData.priority) {
-                cardsArray.unshift(cardData);
-            } else {
-                const firstNonPriorityIndex = cardsArray.findIndex(card => !card.priority);
-                if (firstNonPriorityIndex === -1) {
-                    cardsArray.push(cardData);
-                } else {
-                    cardsArray.splice(firstNonPriorityIndex, 0, cardData);
-                }
-            }
         },
         saveData() {
             const data = {
