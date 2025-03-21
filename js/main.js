@@ -1,4 +1,14 @@
 Vue.component('cardForm', {
+    props: {
+        isEditing: {
+            type: Boolean,
+            required: false
+        },
+        card: {
+            type: Object,
+            required: false
+        }
+    },
     template: `
         <form class="card-form" @submit.prevent="onSubmit">
             <div class="errors" v-for="error in errors">{{ error }}</div>
@@ -17,20 +27,21 @@ Vue.component('cardForm', {
                     Установить высокий приоритет
                 </label>
             </div>
-            <button type="submit" class="btn-save">Сохранить</button>
+            <button v-if="!isEditing" type="submit" class="btn-save">Сохранить</button>
+            <button v-else type="submit" class="btn-save">Сохранить изменения</button>
         </form>
     `,
     data() {
         return {
-            note: null,
-            tasks: [
+            note: this.card ? this.card.note : null,
+            tasks: this.card ? this.card.tasks.map(task => ({ text: task.text })) : [
                 { text: '' },
                 { text: '' },
                 { text: '' }
             ],
-            deadline: null,
+            deadline: this.card ? this.card.deadline : null,
             minDate: new Date().toISOString().split('T')[0],
-            isPriority: false,
+            isPriority: this.card ? this.card.priority : false,
             errors: []
         }
     },
@@ -58,15 +69,10 @@ Vue.component('cardForm', {
                     time: time
                 }
                 this.$emit('card-submitted', cardData);
+                if (!this.isEditing) {
+                    this.resetForm();
+                }
 
-                this.note = null;
-                this.tasks = [
-                    { text: '' },
-                    { text: '' },
-                    { text: '' }
-                ];
-                this.deadline = null;
-                this.isPriority = false;
             } else {
                 if (this.emptyTasks.length > 0) this.errors.push("Задачи не могут быть пустыми!");
                 if (!this.note) this.errors.push("Введите заметку!");
@@ -86,6 +92,18 @@ Vue.component('cardForm', {
             } else {
                 this.errors.push("Задач должно быть не больше 5!");
             }
+        },
+        resetForm() {
+            this.note = null;
+            this.tasks = [
+                { text: '' },
+                { text: '' },
+                { text: '' }
+            ];
+            this.deadline = null;
+            this.isPriority = false;
+            this.errors = [];
+            this.$emit('form-reset');
         }
     }
 });
@@ -127,7 +145,6 @@ Vue.component('card', {
     `,
     data() {
         return{
-            isEditing: false,
             isMenuVisible: false,
         }
     },
@@ -179,7 +196,9 @@ Vue.component('column', {
             <button v-if="title=='Запланировано'" @click="showForm">Создать заметку +</button>
             <card v-for="(card, index) in cards" :key="card.note + index" 
             :card="card" :isCompleted="title == 'Выполнено'" 
-            @dragstart="dragstartHandler($event, card)"> 
+            @dragstart="dragstartHandler($event, card)"
+            @edit-card="$emit('edit-card', card)">
+            > 
             </card>
         </div>
     `,
@@ -218,16 +237,19 @@ Vue.component('board', {
                 :cards="column1Cards" 
                 @open-modal="openModal"
                 @card-dropped="moveCard(column1Cards, $event)"
+                @edit-card="editCard"
             ></column>
             <column 
                 title="В работе" 
                 :cards="column2Cards" 
                 @card-dropped="moveCard(column2Cards, $event)"
+                @edit-card="editCard"
             ></column>
             <column
                 title="Тестирование"
                 :cards="column3Cards" 
                 @card-dropped="moveCard(column3Cards, $event)"
+                @edit-card="editCard"
             ></column>
             <column 
                 title="Выполнено" 
@@ -238,7 +260,7 @@ Vue.component('board', {
         <!-- Модальное окно -->
         <div v-if="isModalVisible" class="modal-overlay">
             <div class="modal-content">
-                <card-form @card-submitted="addCardToColumn1"></card-form>
+                <card-form @card-submitted="addCardToColumn1" :isEditing="isEditing" :card="editingCard"></card-form>
                 <button @click="closeModal" class="close-btn">Закрыть</button>
             </div>
         </div>
@@ -250,7 +272,9 @@ Vue.component('board', {
             column2Cards: [],
             column3Cards: [],
             column4Cards: [],
-            isModalVisible: false
+            isModalVisible: false,
+            isEditing: false,
+            editingCard: null
         }
     },
     methods: {
@@ -259,10 +283,16 @@ Vue.component('board', {
         },
         closeModal() {
             this.isModalVisible = false;
+            this.resetForm();
         },
         addCardToColumn1(cardData) {
-            this.addCardWithPriority(this.column1Cards, cardData);
+            if (this.isEditing) {
+                this.updateCard(cardData);
+            } else {
+                this.addCardWithPriority(this.column1Cards, cardData);
+            }
             this.saveData();
+            this.closeModal();
         },
         moveCard(targetColumn, cardData) {
             // Удаляем карточку из исходной колонки
@@ -279,8 +309,34 @@ Vue.component('board', {
                     break;
                 }
             }// Добавляем карточку в целевую колонку
-            targetColumn.push(cardData);
+            targetColumn.unshift(cardData);
             this.saveData();
+        },
+        updateCard(cardData) {
+            let updated = false;
+            const columns = [
+                this.column1Cards, 
+                this.column2Cards, 
+                this.column3Cards, 
+                this.column4Cards
+            ];
+        
+            columns.forEach(column => {
+                if (updated) return;
+        
+                const index = column.findIndex(card => JSON.stringify(card) == JSON.stringify(this.editingCard));
+                    column.splice(index, 1, cardData);
+                    updated = true;
+            });
+        },
+        editCard(card) {
+            this.editingCard = card;
+            this.isEditing = true;
+            this.openModal()
+        },
+        resetForm() {
+            this.editingCard = null;
+            this.isEditing = false;
         },
         addCardWithPriority(cardsArray, cardData) {
             if (cardData.priority) {
