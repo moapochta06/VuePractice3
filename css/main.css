@@ -232,6 +232,17 @@ select {
     content: '@';
     margin-right: 2px;
 }
+.status {
+    font-weight: bold;
+}
+
+.overdue {
+    color: red;
+}
+
+.on-time {
+    color: green;
+}
 
 textarea {
     width: 100%; /* Ширина на всю доступную область */

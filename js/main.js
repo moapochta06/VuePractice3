@@ -75,7 +75,6 @@ Vue.component('cardForm', {
                 if (this.emptyTasks.length > 0) this.errors.push("Задачи не могут быть пустыми!");
                 if (!this.note) this.errors.push("Введите заметку!");
                 if (!this.deadline) this.errors.push("Назначьте крайний срок!")
-                // if (this.tasks.length < 3) this.errors.push("Введите хотя бы 3 задачи!");
             }
         },
         addTask() {
@@ -173,6 +172,9 @@ Vue.component('card', {
             <p>До {{ formatDeadline }}</p>
             <p v-if="card.returnReason">Причина возврата: {{ card.returnReason }}</p>
             <p v-if="card.completionDate">Завершено: {{ formatDate }}</p>
+
+            <p v-if="card.status == 'overdue'" class="status overdue">Просрочено</p>
+            <p v-else-if="card.status == 'completedOnTime'" class="status on-time">Выполнено в срок</p>
         </div>
     `,
     data() {
@@ -383,8 +385,24 @@ Vue.component('board', {
         
             // Добавление в целевую колонку
             const clonedCard = JSON.parse(JSON.stringify(cardData));
+        
+            // Если целевая колонка — "Выполнено", проверяем дедлайн
+            if (targetColumnIndex === 3) { // Индекс столбца "Выполнено"
+                const currentDate = new Date();
+                const deadlineDate = new Date(clonedCard.deadline);
+                deadlineDate.setHours(23, 59, 59, 999);
+                if (currentDate > deadlineDate) {
+                    clonedCard.status = "overdue"; // Просрочено
+                } else {
+                    clonedCard.status = "completedOnTime"; // Выполнено в срок
+                }
+        
+                // Добавляем дату завершения
+                clonedCard.completionDate = currentDate.toISOString();
+            }
+        
             targetColumn.unshift(clonedCard);
-            
+        
             // Сохраняем данные после успешного перемещения
             this.saveData();
         },
