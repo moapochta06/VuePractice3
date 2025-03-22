@@ -389,6 +389,26 @@ Vue.component('board', {
             const sourceColumn = columns[sourceColumnIndex];
             const cardIndex = sourceColumn.findIndex(card => JSON.stringify(card) == JSON.stringify(cardData));
             const cardToMove = sourceColumn[cardIndex];
+            if (sourceColumnIndex === 0 && targetColumnIndex === 2) { 
+                alert('Нельзя перемещать карточку из "Запланировано" в "Тестирование".');
+                return;
+            }
+            if (sourceColumnIndex === 3 && targetColumnIndex === 0) { 
+                alert('Нельзя перемещать карточку из "Выполнено" в "Запланировано".');
+                return;
+            }
+            if (sourceColumnIndex === 1 && targetColumnIndex === 3) { 
+                alert('Нельзя перемещать карточку из "В работе" в "Выполнено".');
+                return;
+            }
+            if (sourceColumnIndex === 0 && targetColumnIndex === 3) { 
+                alert('Нельзя перемещать карточку из "Запланировано" в "Выполнено".');
+                return;
+            }
+            if (sourceColumnIndex === 3 && targetColumnIndex === 1) { 
+                alert('Нельзя перемещать карточку из "Выполнено" в "В работе".');
+                return;
+            }
         
             if (sourceColumnIndex === 2) { // Если из колонки "Тестирование"
                 if (targetColumnIndex === 1) { // В "В работе"
