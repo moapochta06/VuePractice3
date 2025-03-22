@@ -11,7 +11,7 @@ Vue.component('cardForm', {
     },
     template: `
         <form class="card-form" @submit.prevent="onSubmit">
-            <div class="errors" v-for="error in errors">{{ error }}</div>
+            <div class="errors" v-for="error in errors">{{ error }}<div>
             <input type="text" v-model="note" placeholder="Напишите заметку">
             <p>Задачи</p>
             <div v-for="(task, index) in tasks" :key="index">
@@ -75,7 +75,6 @@ Vue.component('cardForm', {
                 if (this.emptyTasks.length > 0) this.errors.push("Задачи не могут быть пустыми!");
                 if (!this.note) this.errors.push("Введите заметку!");
                 if (!this.deadline) this.errors.push("Назначьте крайний срок!")
-                // if (this.tasks.length < 3) this.errors.push("Введите хотя бы 3 задачи!");
             }
         },
         addTask() {
@@ -104,34 +103,70 @@ Vue.component('cardForm', {
     }
 });
 
-Vue.component('returnReasonModal',{
-    template:`
+Vue.component('returnReasonModal', {
+    props: {
+        card: {
+            type: Object,
+            required: true
+        }
+    },
+    template: `
         <div class="modal-overlay">
             <div class="modal-content">
                 <h3>Укажите причину возврата</h3>
-                <textarea v-model="reason" placeholder="Причина возврата"></textarea>
+                
+                <div v-for="(task, index) in tasks" :key="index" class="task-with-reason">
+                    <div class="task-text">{{ task.text }}</div>
+                    
+                    <select v-model="selectedReasons[index]">
+                        <option value="">Кому</option>
+                        <option value="front">Frontend</option>
+                        <option value="back">Backend</option>
+                        <option value="design">Дизайн</option>
+                    </select>
+                </div>
+                
+                <textarea v-model="generalReason" placeholder="Общая причина возврата"></textarea>
+                
                 <button @click="submitReason">Подтвердить</button>
                 <button @click="cancel">Отмена</button>
             </div>
-        </div>`,
-        data() {
-            return {
-              reason: ''
-            };
-          },
-          methods: {
-            submitReason() {
-              if (this.reason.trim() !== '') {
-                this.$emit('reason-submitted', this.reason);
-              } else {
+        </div>
+    `,
+    data() {
+        return {
+            generalReason: '',
+            selectedReasons: this.card.tasks.map(() => '')
+        };
+    },
+    computed: {
+        tasks() {
+            return this.card.tasks;
+        },
+        isFormValid() {
+            return this.generalReason.trim() !== '' || 
+                   this.selectedReasons.some(reason => reason !== '');
+        }
+    },
+    methods: {
+        submitReason() {
+            if (!this.isFormValid) {
                 alert('Пожалуйста, укажите причину возврата.');
-              }
-            },
-            cancel() {
-              this.$emit('cancel');
+                return;
             }
-          }
-    })
+            const fullReason = this.generalReason.trim();
+        
+            if (fullReason) {
+                this.$emit('reason-submitted', fullReason);
+            } else {
+                alert('Пожалуйста, укажите причину возврата.');
+            }
+        },
+        cancel() {
+            this.$emit('cancel');
+        }
+    }
+});
 
 
 Vue.component('card', {
@@ -166,6 +201,7 @@ Vue.component('card', {
                 <li v-for="(task, index) in card.tasks" :key="index" :class="{ 'completed': task.completed }" class="task-item">
                     <input type="checkbox" v-model="task.completed" :disabled="isCompleted" >
                     {{ task.text }}
+                    <span v-if="task.assignee" class="assignee-label">{{ task.assignee }}</span>
                 </li>
             </ul>
             <p v-if="isEditing">Обновлено: {{ card.time }}</p>
@@ -173,6 +209,7 @@ Vue.component('card', {
             <p>До {{ formatDeadline }}</p>
             <p v-if="card.returnReason">Причина возврата: {{ card.returnReason }}</p>
             <p v-if="card.completionDate">Завершено: {{ formatDate }}</p>
+            <p v-if="card.status">{{ card.status }}</p>
         </div>
     `,
     data() {
@@ -313,7 +350,7 @@ Vue.component('board', {
             </div>
         </div>
          <!-- Модальное окно для указания причины возврата -->
-        <returnReasonModal v-if="showReasonModal" @reason-submitted="submitReturnReason" @cancel="cancelReturnReason"></returnReasonModal>
+        <returnReasonModal v-if="showReasonModal" @reason-submitted="submitReturnReason" @cancel="cancelReturnReason" :card="draggedCard"></returnReasonModal>
     </div>
     `,
     data() {
@@ -364,28 +401,41 @@ Vue.component('board', {
             const sourceColumn = columns[sourceColumnIndex];
             const cardIndex = sourceColumn.findIndex(card => JSON.stringify(card) == JSON.stringify(cardData));
             const cardToMove = sourceColumn[cardIndex];
-        
             if (sourceColumnIndex === 2) { // Если из колонки "Тестирование"
                 if (targetColumnIndex === 1) { // В "В работе"
                     this.draggedCard = cardToMove;
                     this.targetColumn = targetColumn;
-                    this.showReasonModal = true; 
+                    this.showReasonModal = true;
                     return;
                 } else if (targetColumnIndex !== 3) {
-                    // Разрешить только в "В работу" и "Выполнено"
                     alert('Из колонки "Тестирование" можно перемещать только в колонки "В работе" или "Выполнено".');
                     return;
+                }} 
+            if (targetColumnIndex === 3) { // Если карточка перемещается в "Выполнено"
+                const deadlineDate = new Date(cardToMove.deadline);
+                const currentDate = new Date();
+               
+                // Устанавливаем время дедлайна на конец дня
+                deadlineDate.setHours(23, 59, 59, 999);
+
+                // Добавляем отметку о статусе выполнения
+                if (currentDate > deadlineDate) {
+                    cardToMove.status = 'Просрочено';
+                } else {
+                    cardToMove.status = 'Выполнено в срок';
                 }
+                
+                // Добавляем дату завершения
+                cardToMove.completionDate = currentDate.toISOString();
             }
         
             // Удаление карточки из исходной колонки
             sourceColumn.splice(cardIndex, 1);
-        
+
             // Добавление в целевую колонку
-            const clonedCard = JSON.parse(JSON.stringify(cardData));
+            const clonedCard = JSON.parse(JSON.stringify(cardToMove)); 
             targetColumn.unshift(clonedCard);
             
-            // Сохраняем данные после успешного перемещения
             this.saveData();
         },
         deleteCard(cardData) {
@@ -465,12 +515,13 @@ Vue.component('board', {
         },
         submitReturnReason(reason) {
             if (this.draggedCard && this.targetColumn) {
+                this.draggedCard.returnReason = reason;
+        
                 // Находим исходную колонку
                 const columns = this.getColumns();
                 const sourceColumn = columns.find(column => 
                     column.some(card => JSON.stringify(card) == JSON.stringify(this.draggedCard))
                 );
-        
                 if (sourceColumn) {
                     // Удаляем карточку из исходной колонки
                     const index = sourceColumn.findIndex(card => 
@@ -480,17 +531,12 @@ Vue.component('board', {
                         sourceColumn.splice(index, 1);
                     }
                 }
-        
-                // Добавляем причину возврата и перемещаем в новую колонку
-                this.draggedCard.returnReason = reason;
                 this.targetColumn.push(this.draggedCard);
         
                 // Очищаем состояние
                 this.showReasonModal = false;
                 this.draggedCard = null;
                 this.targetColumn = null;
-        
-                // Сохраняем данные
                 this.saveData();
             }
         },

@@ -203,6 +203,36 @@ input[type="checkbox"] {
     color: #ff1130;
 }
 
+.task-with-reason {
+    display: flex;
+    align-items: center;
+    justify-content: space-between; 
+    margin-bottom: 10px;
+}
+
+.task-text {
+    margin-right: 10px;
+}
+
+select {
+    padding: 5px;
+    min-width: 150px;
+}
+.assignee-label {
+    margin-left: 10px;
+    padding: 2px 6px;
+    background-color: #ffebee; 
+    border-radius: 4px;
+    font-size: 12px;
+    color: #d32f2f;
+    border: 1px solid #d32f2f;
+}
+
+.assignee-label:before {
+    content: '@';
+    margin-right: 2px;
+}
+
 textarea {
     width: 100%; /* Ширина на всю доступную область */
     height: 90px; /* Высота текстового поля */
