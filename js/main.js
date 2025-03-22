@@ -21,12 +21,6 @@ Vue.component('cardForm', {
             <div>
                 <input type="date" class="inp-date" v-model="deadline" :min="minDate">
             </div>
-            <div class="priority">
-                <label>
-                    <input type="checkbox" v-model="isPriority" >
-                    Установить высокий приоритет
-                </label>
-            </div>
             <button v-if="!isEditing" type="submit" class="btn-save">Сохранить</button>
             <button v-else type="submit" class="btn-save" @click="$emit('updated')">Сохранить изменения</button>
         </form>
@@ -39,7 +33,6 @@ Vue.component('cardForm', {
             ],
             deadline: this.card ? this.card.deadline : null,
             minDate: new Date().toISOString().split('T')[0],
-            isPriority: this.card ? this.card.priority : false,
             errors: []
         }
     },
@@ -63,7 +56,6 @@ Vue.component('cardForm', {
                     note: this.note,
                     tasks: this.tasks,
                     deadline: this.deadline,
-                    priority: this.isPriority,
                     time: time
                 }
                 this.$emit('card-submitted', cardData);
@@ -96,7 +88,6 @@ Vue.component('cardForm', {
                 { text: '' }
             ];
             this.deadline = null;
-            this.isPriority = false;
             this.errors = [];
             this.$emit('form-reset');
         }
@@ -375,7 +366,7 @@ Vue.component('board', {
             if (this.isEditing) {
                 this.updateCard(cardData);
             } else {
-                this.addCardWithPriority(this.column1Cards, cardData);
+                this.column1Cards.unshift(cardData);
             }
             this.saveData();
             this.closeModal();
@@ -493,18 +484,6 @@ Vue.component('board', {
         resetForm() {
             this.editingCard = null;
             this.isEditing = false;
-        },
-        addCardWithPriority(cardsArray, cardData) {
-            if (cardData.priority) {
-                cardsArray.unshift(cardData);
-            } else {
-                const firstNonPriorityIndex = cardsArray.findIndex(card => !card.priority);
-                if (firstNonPriorityIndex === -1) {
-                    cardsArray.push(cardData);
-                } else {
-                    cardsArray.splice(firstNonPriorityIndex, 0, cardData);
-                }
-            }
         },
         saveData() {
             const data = {
