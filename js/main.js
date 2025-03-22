@@ -21,7 +21,6 @@ Vue.component('cardForm', {
             <div>
                 <input type="date" class="inp-date" v-model="deadline" :min="minDate">
             </div>
-            </div>
             <button v-if="!isEditing" type="submit" class="btn-save">Сохранить</button>
             <button v-else type="submit" class="btn-save" @click="$emit('updated')">Сохранить изменения</button>
         </form>
@@ -337,7 +336,7 @@ Vue.component('board', {
         <!-- Модальное окно -->
         <div v-if="isModalVisible" class="modal-overlay">
             <div class="modal-content">
-                <card-form @card-submitted="addCardToColumn1" :isEditing="isEditing" :card="editingCard"></card-form>
+                <card-form @card-submitted="addCardToColumn1" :isEditing="isEditing" :card="editingCard" @form-reset="closeModal"></card-form>
                 <button @click="closeModal" class="close-btn">Закрыть</button>
             </div>
         </div>
@@ -370,6 +369,8 @@ Vue.component('board', {
         },
         openModal() {
             this.isModalVisible = true;
+            this.isEditing = false;
+            this.editingCard = null;
         },
         closeModal() {
             this.isModalVisible = false;
@@ -387,75 +388,45 @@ Vue.component('board', {
         moveCard(targetColumn, cardData) {
             const columns = this.getColumns();
             const sourceColumnIndex = columns.findIndex(column =>
-                column.some(card => JSON.stringify(card) == JSON.stringify(cardData))
+                column.some(card => JSON.stringify(card) === JSON.stringify(cardData))
             );
             const targetColumnIndex = columns.indexOf(targetColumn);
             const sourceColumn = columns[sourceColumnIndex];
-            const cardIndex = sourceColumn.findIndex(card => JSON.stringify(card) == JSON.stringify(cardData));
+            const cardIndex = sourceColumn.findIndex(card => JSON.stringify(card) === JSON.stringify(cardData));
             const cardToMove = sourceColumn[cardIndex];
-            if (sourceColumnIndex === 2) { // Если из колонки "Тестирование"
+        
+            // Проверка на перемещение из "Тестирования"
+            if (sourceColumnIndex === 2) { // Колонка "Тестирование"
                 if (targetColumnIndex === 1) { // В "В работе"
                     this.draggedCard = cardToMove;
                     this.targetColumn = targetColumn;
                     this.showReasonModal = true;
-                    return;
-                } else if (targetColumnIndex !== 3) {
+                    return; // Прерываем выполнение, пока пользователь не укажет причину
+                } else if (targetColumnIndex !== 3) { // Запрет на другие колонки
                     alert('Из колонки "Тестирование" можно перемещать только в колонки "В работе" или "Выполнено".');
                     return;
-                }} 
-            if (targetColumnIndex === 3) { // Если карточка перемещается в "Выполнено"
-                const deadlineDate = new Date(cardToMove.deadline);
-                const currentDate = new Date();
-               
-                // Устанавливаем время дедлайна на конец дня
-                deadlineDate.setHours(23, 59, 59, 999);
-
-                // Добавляем отметку о статусе выполнения
-                if (currentDate > deadlineDate) {
-                    cardToMove.status = 'Просрочено';
-                } else {
-                    cardToMove.status = 'Выполнено в срок';
                 }
-                
-                // Добавляем дату завершения
-                cardToMove.completionDate = currentDate.toISOString();
-        
-            if (targetColumnIndex === 3) { // Если карточка перемещается в "Выполнено"
-                const deadlineDate = new Date(cardToMove.deadline);
-                const currentDate = new Date();
-                
-                // Устанавливаем время дедлайна на конец дня
-                deadlineDate.setHours(23, 59, 59, 999);
-
-                // Добавляем отметку о статусе выполнения
-                if (currentDate > deadlineDate) {
-                    cardToMove.status = 'Просрочено';
-                } else {
-                    cardToMove.status = 'Выполнено в срок';
-                }
-                
-                // Добавляем дату завершения
-                cardToMove.completionDate = currentDate.toISOString();
             }
         
             // Удаление карточки из исходной колонки
             sourceColumn.splice(cardIndex, 1);
-
-
-            // Добавление в целевую колонку
-            const clonedCard = JSON.parse(JSON.stringify(cardToMove)); 
-            const clonedCard = JSON.parse(JSON.stringify(cardToMove)); 
+        
+            // Добавление карточки в целевую колонку
+            const clonedCard = JSON.parse(JSON.stringify(cardToMove)); // Клонируем карточку
             targetColumn.unshift(clonedCard);
-            
+        
+            // Сохранение данных
             this.saveData();
         },
         deleteCard(cardData) {
             let updated = false;
             this.getColumns().forEach(column => {
-                if (updated) return;
-                const index = column.findIndex(card => JSON.stringify(card) == JSON.stringify(cardData));
-                column.splice(index, 1);
-                updated = true;
+                if (updated) return; // Если карточка уже удалена, выходим из цикла
+                const index = column.findIndex(card => JSON.stringify(card) === JSON.stringify(cardData));
+                if (index > -1) {
+                    column.splice(index, 1);
+                    updated = true;
+                }
             });
             if (updated) {
                 this.saveData();
