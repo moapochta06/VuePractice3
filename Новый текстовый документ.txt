@@ -21,12 +21,6 @@ Vue.component('cardForm', {
             <div>
                 <input type="date" class="inp-date" v-model="deadline" :min="minDate">
             </div>
-            <div class="priority">
-                <label>
-                    <input type="checkbox" v-model="isPriority" >
-                    Установить высокий приоритет
-                </label>
-            </div>
             <button v-if="!isEditing" type="submit" class="btn-save">Сохранить</button>
             <button v-else type="submit" class="btn-save" @click="$emit('updated')">Сохранить изменения</button>
         </form>
@@ -39,7 +33,6 @@ Vue.component('cardForm', {
             ],
             deadline: this.card ? this.card.deadline : null,
             minDate: new Date().toISOString().split('T')[0],
-            isPriority: this.card ? this.card.priority : false,
             errors: []
         }
     },
@@ -63,7 +56,6 @@ Vue.component('cardForm', {
                     note: this.note,
                     tasks: this.tasks,
                     deadline: this.deadline,
-                    priority: this.isPriority,
                     time: time
                 }
                 this.$emit('card-submitted', cardData);
@@ -75,7 +67,6 @@ Vue.component('cardForm', {
                 if (this.emptyTasks.length > 0) this.errors.push("Задачи не могут быть пустыми!");
                 if (!this.note) this.errors.push("Введите заметку!");
                 if (!this.deadline) this.errors.push("Назначьте крайний срок!")
-                // if (this.tasks.length < 3) this.errors.push("Введите хотя бы 3 задачи!");
             }
         },
         addTask() {
@@ -97,41 +88,76 @@ Vue.component('cardForm', {
                 { text: '' }
             ];
             this.deadline = null;
-            this.isPriority = false;
             this.errors = [];
             this.$emit('form-reset');
         }
     }
 });
 
-Vue.component('returnReasonModal',{
-    template:`
+Vue.component('returnReasonModal', {
+    props: {
+        card: {
+            type: Object,
+            required: true
+        }
+    },
+    template: `
         <div class="modal-overlay">
             <div class="modal-content">
                 <h3>Укажите причину возврата</h3>
-                <textarea v-model="reason" placeholder="Причина возврата"></textarea>
+                
+                <div v-for="(task, index) in tasks" :key="index" class="task-with-reason">
+                    <div class="task-text">{{ task.text }}</div>
+                    
+                    <select v-model="selectedReasons[index]">
+                        <option value="">Кому</option>
+                        <option value="front">Frontend</option>
+                        <option value="back">Backend</option>
+                        <option value="design">Дизайн</option>
+                    </select>
+                </div>
+                
+                <textarea v-model="generalReason" placeholder="Общая причина возврата"></textarea>
+                
                 <button @click="submitReason">Подтвердить</button>
                 <button @click="cancel">Отмена</button>
             </div>
-        </div>`,
-        data() {
-            return {
-              reason: ''
-            };
-          },
-          methods: {
-            submitReason() {
-              if (this.reason.trim() !== '') {
-                this.$emit('reason-submitted', this.reason);
-              } else {
+        </div>
+    `,
+    data() {
+        return {
+            generalReason: '',
+            selectedReasons: this.card.tasks.map(() => '')
+        };
+    },
+    computed: {
+        tasks() {
+            return this.card.tasks;
+        },
+        isFormValid() {
+            return this.generalReason.trim() !== '' || 
+                   this.selectedReasons.some(reason => reason !== '');
+        }
+    },
+    methods: {
+        submitReason() {
+            if (!this.isFormValid) {
                 alert('Пожалуйста, укажите причину возврата.');
-              }
-            },
-            cancel() {
-              this.$emit('cancel');
+                return;
             }
-          }
-    })
+            const fullReason = this.generalReason.trim();
+        
+            if (fullReason) {
+                this.$emit('reason-submitted', fullReason);
+            } else {
+                alert('Пожалуйста, укажите причину возврата.');
+            }
+        },
+        cancel() {
+            this.$emit('cancel');
+        }
+    }
+});
 
 
 Vue.component('card', {
@@ -161,11 +187,11 @@ Vue.component('card', {
                 <button class="edit-btn" @click="startEdit">Редактировать</button>
                 <button class="del-btn" @click="deleteCard">Удалить</button>
             </div>
-            <p v-if="card.priority">Высокий приоритет</p>
             <ul>
                 <li v-for="(task, index) in card.tasks" :key="index" :class="{ 'completed': task.completed }" class="task-item">
                     <input type="checkbox" v-model="task.completed" :disabled="isCompleted" >
                     {{ task.text }}
+                    <span v-if="task.assignee" class="assignee-label">{{ task.assignee }}</span>
                 </li>
             </ul>
             <p v-if="isEditing">Обновлено: {{ card.time }}</p>
@@ -173,6 +199,8 @@ Vue.component('card', {
             <p>До {{ formatDeadline }}</p>
             <p v-if="card.returnReason">Причина возврата: {{ card.returnReason }}</p>
             <p v-if="card.completionDate">Завершено: {{ formatDate }}</p>
+            <p v-if="card.status">{{ card.status }}</p>
+            <p v-if="card.status">{{ card.status }}</p>
         </div>
     `,
     data() {
@@ -308,12 +336,12 @@ Vue.component('board', {
         <!-- Модальное окно -->
         <div v-if="isModalVisible" class="modal-overlay">
             <div class="modal-content">
-                <card-form @card-submitted="addCardToColumn1" :isEditing="isEditing" :card="editingCard"></card-form>
+                <card-form @card-submitted="addCardToColumn1" :isEditing="isEditing" :card="editingCard" @form-reset="closeModal"></card-form>
                 <button @click="closeModal" class="close-btn">Закрыть</button>
             </div>
         </div>
          <!-- Модальное окно для указания причины возврата -->
-        <returnReasonModal v-if="showReasonModal" @reason-submitted="submitReturnReason" @cancel="cancelReturnReason"></returnReasonModal>
+        <returnReasonModal v-if="showReasonModal" @reason-submitted="submitReturnReason" @cancel="cancelReturnReason" :card="draggedCard"></returnReasonModal>
     </div>
     `,
     data() {
@@ -341,6 +369,8 @@ Vue.component('board', {
         },
         openModal() {
             this.isModalVisible = true;
+            this.isEditing = false;
+            this.editingCard = null;
         },
         closeModal() {
             this.isModalVisible = false;
@@ -350,7 +380,7 @@ Vue.component('board', {
             if (this.isEditing) {
                 this.updateCard(cardData);
             } else {
-                this.addCardWithPriority(this.column1Cards, cardData);
+                this.column1Cards.unshift(cardData);
             }
             this.saveData();
             this.closeModal();
@@ -358,21 +388,21 @@ Vue.component('board', {
         moveCard(targetColumn, cardData) {
             const columns = this.getColumns();
             const sourceColumnIndex = columns.findIndex(column =>
-                column.some(card => JSON.stringify(card) == JSON.stringify(cardData))
+                column.some(card => JSON.stringify(card) === JSON.stringify(cardData))
             );
             const targetColumnIndex = columns.indexOf(targetColumn);
             const sourceColumn = columns[sourceColumnIndex];
-            const cardIndex = sourceColumn.findIndex(card => JSON.stringify(card) == JSON.stringify(cardData));
+            const cardIndex = sourceColumn.findIndex(card => JSON.stringify(card) === JSON.stringify(cardData));
             const cardToMove = sourceColumn[cardIndex];
         
-            if (sourceColumnIndex === 2) { // Если из колонки "Тестирование"
+            // Проверка на перемещение из "Тестирования"
+            if (sourceColumnIndex === 2) { // Колонка "Тестирование"
                 if (targetColumnIndex === 1) { // В "В работе"
                     this.draggedCard = cardToMove;
                     this.targetColumn = targetColumn;
-                    this.showReasonModal = true; 
-                    return;
-                } else if (targetColumnIndex !== 3) {
-                    // Разрешить только в "В работу" и "Выполнено"
+                    this.showReasonModal = true;
+                    return; // Прерываем выполнение, пока пользователь не укажет причину
+                } else if (targetColumnIndex !== 3) { // Запрет на другие колонки
                     alert('Из колонки "Тестирование" можно перемещать только в колонки "В работе" или "Выполнено".');
                     return;
                 }
@@ -381,11 +411,11 @@ Vue.component('board', {
             // Удаление карточки из исходной колонки
             sourceColumn.splice(cardIndex, 1);
         
-            // Добавление в целевую колонку
-            const clonedCard = JSON.parse(JSON.stringify(cardData));
+            // Добавление карточки в целевую колонку
+            const clonedCard = JSON.parse(JSON.stringify(cardToMove)); // Клонируем карточку
             targetColumn.unshift(clonedCard);
-            
-            // Сохраняем данные после успешного перемещения
+        
+            // Сохранение данных
             this.saveData();
         },
         deleteCard(cardData) {
@@ -434,18 +464,6 @@ Vue.component('board', {
             this.editingCard = null;
             this.isEditing = false;
         },
-        addCardWithPriority(cardsArray, cardData) {
-            if (cardData.priority) {
-                cardsArray.unshift(cardData);
-            } else {
-                const firstNonPriorityIndex = cardsArray.findIndex(card => !card.priority);
-                if (firstNonPriorityIndex === -1) {
-                    cardsArray.push(cardData);
-                } else {
-                    cardsArray.splice(firstNonPriorityIndex, 0, cardData);
-                }
-            }
-        },
         saveData() {
             const data = {
                 column1Cards: this.column1Cards,
@@ -467,12 +485,13 @@ Vue.component('board', {
         },
         submitReturnReason(reason) {
             if (this.draggedCard && this.targetColumn) {
+                this.draggedCard.returnReason = reason;
+        
                 // Находим исходную колонку
                 const columns = this.getColumns();
                 const sourceColumn = columns.find(column => 
                     column.some(card => JSON.stringify(card) == JSON.stringify(this.draggedCard))
                 );
-        
                 if (sourceColumn) {
                     // Удаляем карточку из исходной колонки
                     const index = sourceColumn.findIndex(card => 
@@ -482,17 +501,12 @@ Vue.component('board', {
                         sourceColumn.splice(index, 1);
                     }
                 }
-        
-                // Добавляем причину возврата и перемещаем в новую колонку
-                this.draggedCard.returnReason = reason;
                 this.targetColumn.push(this.draggedCard);
         
                 // Очищаем состояние
                 this.showReasonModal = false;
                 this.draggedCard = null;
                 this.targetColumn = null;
-        
-                // Сохраняем данные
                 this.saveData();
             }
         },
