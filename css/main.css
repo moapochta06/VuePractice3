@@ -58,6 +58,7 @@ p{
 }
 
 .modal-content {
+    width: 33%;
     background: white;
     padding: 26px 25px 20px 25px;
     border-radius: 5px;
@@ -187,7 +188,14 @@ input {
 .task-item {
    display: flex;
    align-items: center;
+   justify-content: space-between;
    margin-bottom: 13px;
+}
+.task-item>div{
+    display: flex;
+    align-items: center;
+    white-space: normal;
+    word-break: break-word;
 }
 input[type="checkbox"] {
     display: block;
@@ -208,6 +216,8 @@ input[type="checkbox"] {
     align-items: center;
     justify-content: space-between; 
     margin-bottom: 10px;
+    white-space: normal;
+    word-break: break-word
 }
 
 .task-text {

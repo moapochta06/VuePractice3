@@ -103,119 +103,139 @@ Vue.component('cardForm', {
     }
 });
 
-Vue.component('returnReasonModal',{
-    template:`
+Vue.component('returnReasonModal', {
+    props: {
+        tasks: {
+            type: Array,
+            required: true
+        }
+    },
+    template: `
         <div class="modal-overlay">
             <div class="modal-content">
                 <h3>Укажите причину возврата</h3>
+                <p>Задачи:</p>
+                <div v-for="(task, index) in tasks" :key="index" class="task-with-reason">
+                    <span class="task-text">{{ task.text }}</span>
+                    <select v-model="task.role" class="role-select">
+                        <option value="">Кому</option>
+                        <option value="front">Фронт</option>
+                        <option value="back">Бэк</option>
+                        <option value="design">Дизайн</option>
+                    </select>
+                </div>
                 <textarea v-model="reason" placeholder="Причина возврата"></textarea>
                 <button @click="submitReason">Подтвердить</button>
                 <button @click="cancel">Отмена</button>
             </div>
-        </div>`,
-        data() {
-            return {
-              reason: ''
-            };
-          },
-          methods: {
-            submitReason() {
-              if (this.reason.trim() !== '') {
-                this.$emit('reason-submitted', this.reason);
-              } else {
-                alert('Пожалуйста, укажите причину возврата.');
-              }
-            },
-            cancel() {
-              this.$emit('cancel');
-            }
-          }
-    })
-
-
-Vue.component('card', {
-    props: {
-        card: {
-            type: Object,
-            required: true
-        },
-        isCompleted: {
-            type: Boolean,
-            default: false
-        },
-        isEditing: {
-            type: Boolean,
-            default: false
-        }
+        </div>
+    `,
+    data() {
+        return {
+            reason: ''
+        };
     },
-    template: `
-        <div class="card" @dragstart="$emit('dragstart', $event)" draggable="true">
+    methods: {
+        submitReason() {
+            if (this.reason.trim() !== '') {
+                this.$emit('reason-submitted', { reason: this.reason, tasks: this.tasks });
+            } else {
+                alert('Пожалуйста, укажите причину возврата.');
+            }
+        },
+        cancel() {
+            this.$emit('cancel');
+        }
+    }
+});
+
+
+    Vue.component('card', {
+        props: {
+            card: {
+                type: Object,
+                required: true
+            },
+            isCompleted: {
+                type: Boolean,
+                default: false
+            },
+            isEditing: {
+                type: Boolean,
+                default: false
+            }
+        },
+        template: `
+            <div class="card" @dragstart="$emit('dragstart', $event)" draggable="true">
             <h3>{{ card.note }}</h3>
             <div class="dots-btn" @click="toggleMenu" :class="{ active: isMenuVisible }">
                 <span class="dot"></span>
                 <span class="dot"></span>
                 <span class="dot"></span>
             </div>
-            <div  class="menu" v-if="isMenuVisible">
+            <div class="menu" v-if="isMenuVisible">
                 <button class="edit-btn" @click="startEdit">Редактировать</button>
                 <button class="del-btn" @click="deleteCard">Удалить</button>
             </div>
-            <p v-if="card.priority">Высокий приоритет</p>
+            <p v-if="card.priority" class="priority-label">Высокий приоритет</p>
             <ul>
                 <li v-for="(task, index) in card.tasks" :key="index" :class="{ 'completed': task.completed }" class="task-item">
-                    <input type="checkbox" v-model="task.completed" :disabled="isCompleted" >
-                    {{ task.text }}
+                    <div>
+                    <input type="checkbox" v-model="task.completed" :disabled="isCompleted">
+                    <span class="task-text">{{ task.text }}</span>
+                    </div>
+                    <span v-if="task.role" class="assignee-label">{{ task.role }}</span>
                 </li>
             </ul>
-            <p v-if="isEditing">Обновлено: {{ card.time }}</p>
-            <p v-else>Создано: {{ card.time }}</p>
-            <p>До {{ formatDeadline }}</p>
-            <p v-if="card.returnReason">Причина возврата: {{ card.returnReason }}</p>
-            <p v-if="card.completionDate">Завершено: {{ formatDate }}</p>
+            <p v-if="isEditing" class="time-info">Обновлено: {{ card.time }}</p>
+            <p v-else class="time-info">Создано: {{ card.time }}</p>
+            <p class="deadline-info">До {{ formatDeadline }}</p>
+            <p v-if="card.returnReason" class="return-reason">Причина возврата: {{ card.returnReason }}</p>
+            <p v-if="card.completionDate" class="completion-date">Завершено: {{ formatDate }}</p>
 
             <p v-if="card.status == 'overdue'" class="status overdue">Просрочено</p>
             <p v-else-if="card.status == 'completedOnTime'" class="status on-time">Выполнено в срок</p>
         </div>
-    `,
-    data() {
-        return{
-            isMenuVisible: false,
-        }
-    },
-    computed: {
-        formatDate() {
-            const nowDate = new Date(this.card.completionDate);
-            return nowDate.toLocaleString('ru-RU', {
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-            });
+        `,
+        data() {
+            return{
+                isMenuVisible: false,
+            }
         },
-        formatDeadline() {
-            const deadline = new Date(this.card.deadline);
-            return deadline.toLocaleString('ru-RU', {
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric'
-            });
-        }
-    },
-    methods: {
-        startEdit() {
-            this.$emit('edit-card', this.card)
-            this.toggleMenu();
+        computed: {
+            formatDate() {
+                const nowDate = new Date(this.card.completionDate);
+                return nowDate.toLocaleString('ru-RU', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                });
+            },
+            formatDeadline() {
+                const deadline = new Date(this.card.deadline);
+                return deadline.toLocaleString('ru-RU', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric'
+                });
+            }
         },
-        toggleMenu() {
-            this.isMenuVisible = !this.isMenuVisible;
-        },
-        deleteCard() {
-            this.$emit('delete-card', this.card);
-            this.toggleMenu();
+        methods: {
+            startEdit() {
+                this.$emit('edit-card', this.card)
+                this.toggleMenu();
+            },
+            toggleMenu() {
+                this.isMenuVisible = !this.isMenuVisible;
+            },
+            deleteCard() {
+                this.$emit('delete-card', this.card);
+                this.toggleMenu();
+            }
         }
-    }
-});
+    });
 
 Vue.component('column', {
     props: {
@@ -315,7 +335,7 @@ Vue.component('board', {
             </div>
         </div>
          <!-- Модальное окно для указания причины возврата -->
-        <returnReasonModal v-if="showReasonModal" @reason-submitted="submitReturnReason" @cancel="cancelReturnReason"></returnReasonModal>
+         <returnReasonModal v-if="showReasonModal" :tasks="draggedCard.tasks" @reason-submitted="submitReturnReason" @cancel="cancelReturnReason"></returnReasonModal>
     </div>
     `,
     data() {
@@ -349,6 +369,9 @@ Vue.component('board', {
             this.resetForm();
         },
         addCardToColumn1(cardData) {
+            cardData.tasks.forEach(task => {
+                task.role = ''; // Изначально роль не выбрана
+            });
             if (this.isEditing) {
                 this.updateCard(cardData);
             } else {
@@ -371,10 +394,9 @@ Vue.component('board', {
                 if (targetColumnIndex === 1) { // В "В работе"
                     this.draggedCard = cardToMove;
                     this.targetColumn = targetColumn;
-                    this.showReasonModal = true; 
+                    this.showReasonModal = true;
                     return;
                 } else if (targetColumnIndex !== 3) {
-                    // Разрешить только в "В работу" и "Выполнено"
                     alert('Из колонки "Тестирование" можно перемещать только в колонки "В работе" или "Выполнено".');
                     return;
                 }
@@ -483,7 +505,7 @@ Vue.component('board', {
                 this.column4Cards = parsedData.column4Cards;
             }
         },
-        submitReturnReason(reason) {
+        submitReturnReason({ reason, tasks }) {
             if (this.draggedCard && this.targetColumn) {
                 // Находим исходную колонку
                 const columns = this.getColumns();
@@ -501,8 +523,11 @@ Vue.component('board', {
                     }
                 }
         
-                // Добавляем причину возврата и перемещаем в новую колонку
+                // Добавляем причину возврата и обновляем задачи с ролями
                 this.draggedCard.returnReason = reason;
+                this.draggedCard.tasks = tasks; // Обновляем задачи с выбранными ролями
+        
+                // Перемещаем в новую колонку
                 this.targetColumn.push(this.draggedCard);
         
                 // Очищаем состояние
